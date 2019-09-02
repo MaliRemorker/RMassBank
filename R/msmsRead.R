@@ -495,12 +495,10 @@ msmsRead.parallel <- function(cl,w,filetable = NULL, files = NULL, cpdids = NULL
             envir <- environment()
             ## clusterExport(cl,c("count","envir")) # Have no idea what
             ##                             # for are those two.
-            doone <- function(fn) {
+
+            doone <- function(fn,cpdID) {
                 ## Find compound ID
-                cpdID <- cpdids[count]
                 retrieval <- findLevel(cpdID,TRUE)
-                ## Set counter up
-                envir$count <- envir$count + 1
 							
                 ## Retrieve spectrum data
                 spec <- findMsMsHR(fileName = fn, 
@@ -510,12 +508,13 @@ msmsRead.parallel <- function(cl,w,filetable = NULL, files = NULL, cpdids = NULL
                                    fillPrecursorScan = settings$findMsMsRawSettings$fillPrecursorScan,
                                    rtMargin = settings$rtMargin,
                                    deprofile = settings$deprofile, retrieval=retrieval)
-                message("File: ",fn,"Compound: ",cpdID,"DONE")
+                message("File: ",fn," ;Compound ID: ",cpdID,"; Status: DONE")
                 gc()
                 return(spec)
             
             }
-            cllct <- parallel::parLapply(cl,w@files,doone)
+            parallel::clusterExport(cl,c("readMethod","mode","confirmMode","useRtLimit","settings"),envir=environment())
+            cllct <- parallel::clusterMap(cl,doone,w@files,cpdids)
             w@spectra <- as(cllct,"SimpleList")
             names(w@spectra) <- basename(as.character(w@files))
             return(w)
