@@ -10,7 +10,7 @@ assign("listEnv", NULL, envir=.listEnvEnv)
 #' \code{listEnv} (which defaults to the global environment) and used by
 #' the \code{findMz}, \code{findCAS}, ... functions. The CSV file is required to have at least the following columns, which are used for 
 #' further processing and must be named correctly (but present in any order): \var{ID, Name, SMILES, RT,
-#' CAS}
+#' CAS}. If a dataframe is supplied instead of path, this can be loaded in, too.
 #' 
 #' resetList() clears a currently loaded list.
 #' 
@@ -18,10 +18,13 @@ assign("listEnv", NULL, envir=.listEnvEnv)
 #' @usage loadList(path, listEnv=NULL, check=TRUE)
 #' 
 #' resetList()
-#' @param path Path to the CSV list.
-#' @param listEnv The environment to load the list into. By default, the namelist is loaded
-#' 		into an environment internally in RMassBank. 
-#' @param check A parameter that specifies whether the SMILES-Codes in the list should be checked for readability by rcdk.
+#' @param path Path to the CSV list. Alternatively, a data.frame of a
+#'     previously read in compound list.
+#' @param listEnv The environment to load the list into. By default,
+#'     the namelist is loaded into an environment internally in
+#'     RMassBank.
+#' @param check A parameter that specifies whether the SMILES-Codes in
+#'     the list should be checked for readability by rcdk.
 #' @return No return value.
 #' @author Michael Stravs
 #' @seealso \code{\link{findMz}}
@@ -34,20 +37,29 @@ assign("listEnv", NULL, envir=.listEnvEnv)
 loadList <- function(path, listEnv = NULL, check = TRUE)
 {
 	if(is.null(listEnv))
-		listEnv <- .listEnvEnv
-	if(!file.exists(path))
-		stop("The supplied file does not exist, please supply a correct path")
-        
-    # Try out if the file is comma- or semicolon-separated
-    compoundList <- read.csv(path, stringsAsFactors=FALSE, check.names=FALSE)
-	n <- colnames(compoundList)
-    if(!("ID" %in% n)){ # If no ID column, it must be semicolon separated
-        compoundList <- read.csv2(path, stringsAsFactors=FALSE, check.names=FALSE)
+            listEnv <- .listEnvEnv
+
+        compoundList <- if (is.data.frame(path))
+                        {
+                            path
+                        } else {
+                            if(!file.exists(path))
+                                stop("The supplied file does not exist, please supply a correct path")
+                            ## Try out if the file is comma- or semicolon-separated.
+                            tmpList <- read.csv(path, stringsAsFactors=FALSE, check.names=FALSE)
+                            n <- colnames(tmpList)
+                            if(!("ID" %in% n)){ # If no ID column, it must be semicolon separated
+                                tmpList <- read.csv2(path, stringsAsFactors=FALSE, check.names=FALSE)
+                                n <- colnames(tmpList)
+                                if(!("ID" %in% n)){ # ...or there must be something wrong with the column names
+                                    stop("There is no 'ID' column in the compound list")
+                                }
+                            }
+                            tmpList
+                        }
         n <- colnames(compoundList)
-        if(!("ID" %in% n)){ # ...or there must be something wrong with the column names
-             stop("There is no 'ID' column in the compound list")
-        }
-    }
+                     
+                     
     
     # Now everything should be fine, at least regarding csv and ssv
     
