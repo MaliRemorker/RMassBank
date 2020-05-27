@@ -2,8 +2,7 @@
 #' @import Biobase
 #' @import S4Vectors
 
-
-# @exportClass RmbSpectrum2
+#' @exportClass RmbSpectrum2
 .RmbSpectrum2 <- setClass("RmbSpectrum2",
 		representation = representation(
 				satellite="logical",
@@ -14,10 +13,12 @@
 				formula = "character",
 				dbe = "numeric",
 				formulaCount = "integer",
+				formulaSource = "character",
 				dppm = "numeric",
 				dppmBest = "numeric",
 				ok = "logical",
-				info = "list"
+				info = "list",
+				properties = "data.frame"
 		),
 		contains=c("Spectrum2"),
 		prototype = prototype(
@@ -29,15 +30,17 @@
 				formula = character(),
 				dbe = numeric(),
 				formulaCount = integer(),
+				formulaSource = character(),
 				dppm = numeric(),
 				dppmBest = numeric(),
 				ok = logical(),
 				info = list(),
-				new("Versioned", versions=c(classVersion("Spectrum2"), RmbSpectrum2 = "0.1.0"))
+				properties = data.frame(),
+				new("Versioned", versions=c(classVersion("Spectrum2"), RmbSpectrum2 = "0.1.2"))
 		),
 )
 
-# @exportClass RmbSpectrum2List
+#' @exportClass RmbSpectrum2List
 .RmbSpectrum2List <- setClass("RmbSpectrum2List", contains="SimpleList",
 		prototype=prototype(elementType="RmbSpectrum2"))
 #
@@ -45,7 +48,7 @@
 #			coerceToSimpleList(from)
 #		})
 
-# @exportClass RmbSpectraSet
+#' @exportClass RmbSpectraSet
 .RmbSpectraSet <- setClass("RmbSpectraSet",
 		representation = representation(
 				parent = "Spectrum1",
@@ -59,9 +62,11 @@
 				id = "character",
 				mz = "numeric",
 				name = "character",
-				mode = "character"
+				mode = "character",
+        smiles = "character"
 				#annotations = "list"
 				),
+    contains=c("Versioned"),
 		prototype = prototype(
 				parent = new("Spectrum1"),
 				children = new("RmbSpectrum2List"),
@@ -72,11 +77,15 @@
 				id = character(),
 				mz = numeric(),
 				name = character(),
-				mode = character()
+				mode = character(),
+        smiles = character(),
+        new("Versioned", versions=c(RmbSpectraSet = "0.1.2"))
+    # version 0.1.1: introduced versioning and SMILES slot
+    # version 0.1.2: feed polarity to parent and children
 		)
 );
 
-# @exportClass RmbSpectraSetList
+#' @exportClass RmbSpectraSetList
 .RmbSpectraSetList <- setClass("RmbSpectraSetList", contains="SimpleList",
 		prototype=prototype(elementType="RmbSpectraSet"))
 

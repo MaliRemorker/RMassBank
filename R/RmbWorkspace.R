@@ -64,7 +64,10 @@ setClassUnion("msmsWorkspaceOrNULL", "NULL")
 		),
 		contains=c("Versioned"),
 		prototype = prototype(
-				new("Versioned", versions=c(msmsWorkspace = "2.0.1")),
+				# Version 2.0.2: the RmbSpectrum2 objects were raised to version 0.1.1.
+        # Version 2.0.3: the RmbSpectraSet objects are now versioned and at 0.1.1.
+        # Version 2.0.4: polarity into Spectrum1 and RmbSpectrum2 objects
+				new("Versioned", versions=c(msmsWorkspace = "2.0.4")),
 				parent = NULL
 		)
 )
@@ -144,7 +147,9 @@ setClass("mbWorkspace",
 				# output data:
 				compiled = "list",
 				compiled_ok = "list",
+				compiled_notOk = "list",
 				mbfiles = "list",
+				mbfiles_notOk = "list",
 				molfile = "list",
 				ok = "integer",
 				problems = "integer"
@@ -251,9 +256,10 @@ loadMsmsWorkspace <- function(fileName, loadSettings = FALSE)
 #' @export
 newMbWorkspace <- function(w)
 {
+  #w <- fillback(w)
 	mb <- new("mbWorkspace",
-			spectra = w@spectra,
-			aggregated = w@aggregated
+			spectra = w@spectra#,
+	#		aggregated = w@aggregated
 			)
 	return(mb)
 }

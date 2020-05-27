@@ -7,70 +7,118 @@
 .updateObject.RmbWorkspace <- setMethod("updateObject", signature(object="msmsWorkspace"), function(object, ..., verbose = FALSE) 
 		{
 			w <- object
-			if(isVersioned(w))
-				if(all(isCurrent(w)))
-					return(w)
-			# get msmsWorkspace version
-			if(!isVersioned(w))
-				v <- "1.0.0"
-			else
-				v <- classVersion(w)["msmsWorkspace"]
-			w.new <- w
-			# gradually step up versions
-			# 2.0.1: 
-			# * spectra go from specs, analyzedSpecs or their rc analogs to Spectra
-			# * data pre recalibration get shifted to "parent workspace"
-			if(v < "2.0.1")
-			{
-				w.old <- w.new
-				w.new <- new("msmsWorkspace")
-				w.new@files <- w.old@files
-				# Do we have recalibration done? If so: all data in the WS will be the recalibrated data, the unrecalibrated data will be
-				# moved into a new parent workspace which is referenced
-				progress <- .findProgress.v1(w.old)
-				if(4 %in% progress)
-				{
-					w.parent <- w.old
-					slot(w.parent, "recalibratedSpecs", check=FALSE) <- NULL
-					slot(w.parent, "analyzedRcSpecs", check=FALSE) <- NULL
-					slot(w.parent, "aggregatedRcSpecs", check=FALSE) <- NULL
-					slot(w.parent, "reanalyzedRcSpecs", check=FALSE) <- NULL
-					slot(w.parent, "refilteredRcSpecs", check=FALSE) <- NULL
-					slot(w.old, "specs", check=FALSE) <- w.old@recalibratedSpecs
-					slot(w.old, "analyzedSpecs", check=FALSE) <- w.old@analyzedRcSpecs
-					w.parent.new <- updateObject(w.parent)
-					w.new@parent <- w.parent.new
-				}
-				w.new@spectra <- .updateObject.spectra(w.old@specs, w.old@analyzedSpecs)
-				if(7 %in% progress)
-				{
-					w.new@aggregated <- .updateObject.aggregated(w.old@reanalyzedRcSpecs)
-				}
-				else if(6 %in% progress)
-				{
-					w.new@aggregated <- .updateObject.aggregated(w.old@aggregatedRcSpecs)
-				}
-        else if(3 %in% progress)
-        {
-          w.new@aggregated <- .updateObject.aggregated(w.old@aggregatedSpecs)
-        }
-        
-        if(8 %in% progress)
-        {
-          w.new@aggregated <- .updateObject.refiltered(w.new, w.new@aggregated, w.old@refilteredRcSpecs)
-        }
-        
-			}
-			
-			return(w.new)
+			w <- .updateObject.RmbWorkspace.1to2(w, ..., verbose)
+			w <- .updateObject.RmbWorkspace.RmbSpectraSet(w, ..., verbose)
+			classVersion(w)["msmsWorkspace"] <- "2.0.4"
+			w
 		})
 
 
+.updateObject.RmbWorkspace.RmbSpectraSet <- function(object, ..., verbose = FALSE) 
+{
+	w <- object
+	v <- classVersion(w)["msmsWorkspace"]
+	if(v < "2.0.4")
+	{
+		for(i in seq_len(length(w@spectra)))
+			w@spectra[[i]] <- updateObject(w@spectra[[i]])
+	}
+	w
+}
+
+.updateObject.RmbWorkspace.1to2 <- function(object, ..., verbose = FALSE) 
+{
+	w <- object
+	if(isVersioned(w))
+		if(all(isCurrent(w)))
+			return(w)
+	# get msmsWorkspace version
+	if(!isVersioned(w))
+		v <- "1.0.0"
+	else
+		v <- classVersion(w)["msmsWorkspace"]
+	w.new <- w
+	# gradually step up versions
+	# 2.0.1: 
+	# * spectra go from specs, analyzedSpecs or their rc analogs to Spectra
+	# * data pre recalibration get shifted to "parent workspace"
+	if(v < "2.0.1")
+	{
+		w.old <- w.new
+		w.new <- new("msmsWorkspace")
+		w.new@files <- w.old@files
+		# Do we have recalibration done? If so: all data in the WS will be the recalibrated data, the unrecalibrated data will be
+		# moved into a new parent workspace which is referenced
+		progress <- .findProgress.v1(w.old)
+		if(4 %in% progress)
+		{
+			w.parent <- w.old
+			# remove the recalibrated processing results from the future parent workspace
+			slot(w.parent, "recalibratedSpecs", check=FALSE) <- NULL
+			slot(w.parent, "analyzedRcSpecs", check=FALSE) <- NULL
+			slot(w.parent, "aggregatedRcSpecs", check=FALSE) <- NULL
+			slot(w.parent, "reanalyzedRcSpecs", check=FALSE) <- NULL
+			slot(w.parent, "refilteredRcSpecs", check=FALSE) <- NULL
+			# move the recalibrated base data to the base data of the current workspace
+			slot(w.old, "specs", check=FALSE) <- w.old@recalibratedSpecs
+			slot(w.old, "analyzedSpecs", check=FALSE) <- w.old@analyzedRcSpecs
+			w.parent.new <- updateObject(w.parent)
+			# fill in the calibrations into the parent, which are otherwise not copied
+			slot(w.parent.new, "rc", check=FALSE) <- w.old@rc
+			slot(w.parent.new, "rc.ms1", check=FALSE) <- w.old@rc.ms1
+			w.new@parent <- w.parent.new
+		}
+		w.new@spectra <- .updateObject.spectra(w.old@specs, w.old@analyzedSpecs)
+		if(any(c(3,6,7) %in% progress))
+		{
+			w.new@aggregated <- aggregateSpectra(w.new, addIncomplete=TRUE)
+			warning("You are loading an archive from an old RMassBank version. The aggregate tables are not loaded from the original object, but recomputed.")
+			warning("If you hand-edited any aggregate table, the information might not be retained in the new object.")
+		}
+		# else if(6 %in% progress)
+		# {
+		# 	w.new@aggregated <- .updateObject.aggregated(w.old@aggregatedRcSpecs)
+		# }
+		# else if(3 %in% progress)
+		# {
+		# 	w.new@aggregated <- .updateObject.aggregated(w.old@aggregatedSpecs)
+		# }
+		
+		if(8 %in% progress)
+		{
+			w.new <- .updateObject.refiltered(w.new, w.new@aggregated, w.old@refilteredRcSpecs)
+			warning("You are loading an archive from an old RMassBank version. The multiplicity filtering results are not loaded from the original object, but recomputed.")
+			warning("If you hand-edited any multiplicity filtering results, the information might not be retained in the new object.")
+		}
+		
+	}
+  
+  
+  # 2.0.4 directly from v1: update spectra polarity, because RmbSpectraSet is generated directly as a
+  # 0.1.2 versioned class and does not go through the update
+  w.new@spectra <- as(lapply(w.new@spectra, .updateObject.RmbSpectraSet.updatePolarity), "SimpleList")
+	
+	return(w.new)
+}
 
 .updateObject.spectra <- function(specs, analyzedSpecs)
 {
 	if((length(specs) != length(analyzedSpecs)) && (0 != length(analyzedSpecs) ))
+	{
+		# Try to fix this, in early processed versions it could happen that a scan got reused
+		scans.analyzed <- unlist(lapply(analyzedSpecs, function(sp) sp$scan))
+		scans.recorded <- unlist(lapply(specs, function(sp) sp@acquisitionNum))
+		scans.reordered <- match(scans.recorded, scans.analyzed)
+		analyzedSpecs <- analyzedSpecs[scans.reordered]
+		id <- analyzedSpecs[[1]]$id
+		warning(paste0(id, ": Spectra were reordered to match acquisition data."))
+	}
+	if((length(specs) != length(analyzedSpecs)) && (0 != length(analyzedSpecs) ))
+	{
 		stop("updateObject: Could not update object because data is inconsistent. length(analyzedSpecs) != length(specs) or 0")
+		# Maybe it hasn't worked :)
+	}
+	
 	# process info ex specs
 	spectra <- lapply(specs, function(spec){
 				set <- new("RmbSpectraSet")
@@ -79,6 +127,7 @@
 				set@id <- as.character(as.integer(spec$id))
 				set@formula <- spec$formula
 				set@found <- as.logical(spec$foundOK)
+        set@smiles <- ""
 				# now parent and child MS
 				# check for parent recalibration column
 				if(set@found)
@@ -150,6 +199,19 @@
 	{
 		spectra <- mapply(function(set, analyzedSpec)
 				{
+					
+					if(length(analyzedSpec$msmsdata) != length(set@children))
+					{
+						# Try to fix this, in early processed versions it could happen that a scan got reused
+						scans.analyzed <- unlist(lapply(analyzedSpec$msmsdata, function(sp) sp$scan))
+						scans.recorded <- unlist(lapply(set@children, function(sp) sp@acquisitionNum))
+						scans.reordered <- match(scans.recorded, scans.analyzed)
+						analyzedSpec$msmsdata <- analyzedSpec$msmsdata[scans.reordered]
+						id <- analyzedSpec$msmsdata[[1]]$id
+						warning(paste0(id, ": Spectra were reordered to match acquisition data."))
+					}
+					
+					
 					if(length(analyzedSpec$msmsdata) != length(set@children))
 						stop("updateObject: Could not update object because data is inconsistent. length(analyzedSpec$msmsdata) != length(set@children)")
 					
@@ -429,53 +491,17 @@
   # Filter peaks again, and redetermine the filterMultiplicity settings heuristically - 
   # it is much easier than substituting the info in from the refiltering table
   
-  peaksFiltered <- filterPeaksMultiplicity(peaksMatched(specs),
-                                           "formula", TRUE)
-  
-  
-  peaksFilteredReanalysis <- 
-    filterPeaksMultiplicity(specs[!is.na(specs$matchedReanalysis) & specs$matchedReanalysis,,drop=FALSE], "reanalyzed.formula", FALSE)
-  
-  
-  
-  specs <- addProperty(specs, "formulaMultiplicity", "numeric", 0)
-  
-  # Reorder the columns of the filtered peaks such that they match the columns
-  # of the original aggregated table; such that the columns can be substituted in.
-  
-  peaksFiltered <- peaksFiltered[,colnames(specs)]
-  peaksFilteredReanalysis <- peaksFilteredReanalysis[,colnames(specs)]
-  
-  # substitute into the parent dataframe
-  specs[match(peaksFiltered$index,specs$index),] <- peaksFiltered
-  specs[match(peaksFilteredReanalysis$index,specs$index),] <- peaksFilteredReanalysis
-  
+  # Get what the lowest multiplicity was, and filter using this.
   multiplicityFilter <- min(refilteredSpecs$peaksOK$formulaMultiplicity, refilteredSpecs$peaksReanOK$formulaMultiplicity)
   
-  specs <- addProperty(specs, "filterOK", "logical", FALSE)
   
-  specs[specs$formulaMultiplicity > (multiplicityFilter - 1),"filterOK"] <- TRUE
+  w <- filterMultiplicity(
+    w, archivename = NA, mode = NA, multiplicityFilter = multiplicityFilter)
+  # aggregate again:
+  w@aggregated <- aggregateSpectra(w@spectra, addIncomplete=TRUE)
+  w <- processProblematicPeaks(w, "")
   
-  
-  
-  peaksReanOK <- specs[
-    specs$filterOK & !is.na(specs$matchedReanalysis) & specs$matchedReanalysis,,drop=FALSE]
-  
-  # build M+H+ table
-  mhsat <- lapply(w@spectra, function(s) c(s@id, findMz.formula(s@formula, "pH", 10, 0)$mzCenter))
-  mhsat.df <- as.data.frame(do.call(rbind, mhsat))
-  colnames(mhsat.df) <- c("cpdID", "mass")
-  mhsat.df$mass <- as.numeric(as.character(mhsat.df$mass))
-  
-  # Kick the M+H+ satellites out of peaksReanOK:
-  peaksReanOK$mzCenter <- mhsat.df[match(as.numeric(as.character(peaksReanOK$cpdID)), as.numeric(as.character(mhsat.df$cpdID))),"mass"]
-    
-  peaksReanBad <- peaksReanOK[
-    !((peaksReanOK$mzFound < peaksReanOK$mzCenter - 1) |
-        (peaksReanOK$mzFound > peaksReanOK$mzCenter + 1)),]
-  specs[match(peaksReanBad$index, specs$index),"filterOK"] <- FALSE
-  
-  return(specs)
+  return(w)
   
 }
 
